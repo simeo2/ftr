@@ -20,10 +20,14 @@ class FTR_Scraper {
         wp_schedule_event( time() + ( $hours * 3600 ), 'freetrustpilotreviews_custom', 'freetrustpilotreviews_daily_fetch_hook' );
     }
 
-    private static function translate_en_to_tr( $text ) {
+    // UPDATED: Now accepts dynamic 'from' and 'to' language codes
+    private static function translate_text( $text, $from, $to ) {
         if ( empty($text) ) return '';
-        $url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=tr&dt=t&q=' . urlencode($text);
+        if ( $from === $to && $from !== 'auto' ) return $text; // Skip if same language
+        
+        $url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=' . urlencode($from) . '&tl=' . urlencode($to) . '&dt=t&q=' . urlencode($text);
         $response = wp_remote_get($url, array('timeout' => 15));
+        
         if ( is_wp_error($response) ) return $text;
         
         $body = wp_remote_retrieve_body($response);
@@ -111,6 +115,11 @@ class FTR_Scraper {
             return strtotime($a['date']) - strtotime($b['date']);
         });
 
+        // Pull Translation Settings Before the Loop
+        $enable_trans = FTR_DB::get_setting('enable_translation', '0');
+        $trans_from   = FTR_DB::get_setting('translate_from', 'auto');
+        $trans_to     = FTR_DB::get_setting('translate_to', 'en');
+
         global $wpdb;
         $table = $wpdb->prefix . 'ftr_reviews';
 
@@ -134,7 +143,14 @@ class FTR_Scraper {
                     }
                 } else {
                     $max_id++;
-                    $translated_text = self::translate_en_to_tr($rev['text']);
+                    
+                    // Conditionally Translate
+                    if ( $enable_trans === '1' ) {
+                        $front_end_text = self::translate_text($rev['text'], $trans_from, $trans_to);
+                    } else {
+                        $front_end_text = $rev['text']; // Fallback to raw English
+                    }
+                    
                     $inserted = $wpdb->insert( $table, array(
                         'tp_id'       => $rev['id'],
                         'short_id'    => $max_id,
@@ -142,7 +158,7 @@ class FTR_Scraper {
                         'avatar'      => $rev['avatar'],
                         'rating'      => $rev['rating'],
                         'review_text' => $rev['text'],
-                        'review_text_tr' => $translated_text,
+                        'review_text_tr' => $front_end_text, // Safely repurposed DB column
                         'review_date' => date('Y-m-d H:i:s', strtotime($rev['date']))
                     ));
                     
@@ -162,7 +178,7 @@ class FTR_Scraper {
         
         FTR_DB::update_setting('cache_version', time());
         FTR_DB::add_log('success', 'Fetch cycle completed.', $metrics);
-        FTR_DB::prune_logs( 30 ); // Delete logs older than 30 days
+        FTR_DB::prune_logs( 30 );
 
         return array( 'success' => true, 'message' => "Successfully fetched. Inserted " . $metrics['inserted_count'] . " new reviews." );
     }
