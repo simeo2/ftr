@@ -1,6 +1,18 @@
-<?php if ( ! defined( 'ABSPATH' ) ) exit; ?>
+<?php 
+if ( ! defined( 'ABSPATH' ) ) exit; 
+
+$avail_languages = array(
+    'en' => 'English', 'tr' => 'Turkish', 'mk' => 'Macedonian', 
+    'es' => 'Spanish', 'fr' => 'French', 'de' => 'German', 
+    'it' => 'Italian', 'pt' => 'Portuguese', 'nl' => 'Dutch', 
+    'ru' => 'Russian', 'ar' => 'Arabic', 'zh-CN' => 'Chinese',
+    'ja' => 'Japanese', 'ko' => 'Korean', 'sv' => 'Swedish',
+    'el' => 'Greek', 'bg' => 'Bulgarian', 'ro' => 'Romanian'
+);
+?>
 
 <style>
+    .ftr-wrap { max-width: 1050px; margin-top: 20px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; }
     .ftr-header h1 { font-size: 26px; font-weight: 600; margin: 0 0 20px 0; color: #1d2327; display: flex; align-items: center; gap: 10px; }
     .ftr-badge { background: #2271b1; color: #fff; padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: 500; }
     .ftr-tab-content { display: none; background: #fff; padding: 30px; border: 1px solid #c3c4c7; border-top: none; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
@@ -16,6 +28,7 @@
     .ftr-status-box { background: #fff; border: 1px solid #e2e4e7; padding: 15px; border-radius: 6px; text-align: center; }
     .ftr-status-box h4 { margin: 0 0 5px 0; font-size: 12px; color: #646970; text-transform: uppercase; }
     .ftr-status-box p { margin: 0; font-size: 16px; font-weight: 600; color: #1d2327; }
+    .ftr-trans-options { background: #fff; border-left: 3px solid #00b67a; padding: 15px; margin-top: 10px; border-radius: 0 4px 4px 0; }
 </style>
 
 <div class="wrap ftr-wrap">
@@ -28,9 +41,9 @@
     <?php endif; ?>
 
     <?php if ( $is_wizard ) : ?>
-        <div class="ftr-card" style="max-width: 700px; margin-top: 20px;">
+        <div class="ftr-card" style="max-width: 800px; margin-top: 20px;">
             <h2>🚀 Welcome to Setup</h2>
-            <p>Let's get your Trustpilot reviews syncing. Enter your public URL below and run the first fetch.</p>
+            <p>Let's get your Trustpilot reviews syncing. Enter your URL and configure optional auto-translation.</p>
             <form method="post" action="">
                 <?php wp_nonce_field( 'ftr_fetch_action', 'ftr_fetch_nonce' ); ?>
                 <input type="hidden" name="ftr_manual_fetch" value="1">
@@ -41,9 +54,29 @@
                     </tr>
                     <tr valign="top">
                         <th scope="row" style="padding-left: 0;">Sync Interval</th>
+                        <td><input type="number" name="sync_hours" value="<?php echo esc_attr( $sync_hours ); ?>" min="1" max="168" class="small-text" required /> <span class="description">Hours</span></td>
+                    </tr>
+                    <tr valign="top">
+                        <th scope="row" style="padding-left: 0;">Auto-Translation</th>
                         <td>
-                            <input type="number" name="sync_hours" value="<?php echo esc_attr( $sync_hours ); ?>" min="1" max="168" class="small-text" required />
-                            <span class="description">Hours (Recommended: 24 to 36)</span>
+                            <label><input type="checkbox" name="enable_translation" value="1" <?php checked( '1', $enable_translation ); ?>> Enable API Translation on Fetch</label>
+                            <div class="ftr-trans-options">
+                                <label style="margin-right:15px;">From: 
+                                    <select name="translate_from">
+                                        <option value="auto" <?php selected('auto', $translate_from); ?>>Auto Detect</option>
+                                        <?php foreach($avail_languages as $code => $name): ?>
+                                            <option value="<?php echo esc_attr($code); ?>" <?php selected($code, $translate_from); ?>><?php echo esc_html($name); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </label>
+                                <label>To: 
+                                    <select name="translate_to">
+                                        <?php foreach($avail_languages as $code => $name): ?>
+                                            <option value="<?php echo esc_attr($code); ?>" <?php selected($code, $translate_to); ?>><?php echo esc_html($name); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </label>
+                            </div>
                         </td>
                     </tr>
                 </table>
@@ -70,7 +103,7 @@
             </div>
 
             <div class="ftr-card">
-                <h2>Configuration</h2>
+                <h2>Configuration & Translations</h2>
                 <form method="post" action="">
                     <?php wp_nonce_field( 'ftr_fetch_action', 'ftr_fetch_nonce' ); ?>
                     <input type="hidden" name="ftr_save_settings" value="1">
@@ -81,13 +114,34 @@
                         </tr>
                         <tr valign="top">
                             <th scope="row">Sync Interval</th>
+                            <td><input type="number" name="sync_hours" value="<?php echo esc_attr( $sync_hours ); ?>" min="1" max="168" class="small-text" required /> <span class="description">Hours</span></td>
+                        </tr>
+                        <tr valign="top">
+                            <th scope="row">API Translation</th>
                             <td>
-                                <input type="number" name="sync_hours" value="<?php echo esc_attr( $sync_hours ); ?>" min="1" max="168" class="small-text" required />
-                                <span class="description">Hours between automatic background syncs.</span>
+                                <label><input type="checkbox" name="enable_translation" value="1" <?php checked( '1', $enable_translation ); ?>> Enable Automatic Translation for new reviews</label>
+                                <div class="ftr-trans-options">
+                                    <label style="margin-right:15px;">Translate From:<br> 
+                                        <select name="translate_from" style="margin-top:5px;">
+                                            <option value="auto" <?php selected('auto', $translate_from); ?>>Auto Detect</option>
+                                            <?php foreach($avail_languages as $code => $name): ?>
+                                                <option value="<?php echo esc_attr($code); ?>" <?php selected($code, $translate_from); ?>><?php echo esc_html($name); ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </label>
+                                    <label>Translate To:<br> 
+                                        <select name="translate_to" style="margin-top:5px;">
+                                            <?php foreach($avail_languages as $code => $name): ?>
+                                                <option value="<?php echo esc_attr($code); ?>" <?php selected($code, $translate_to); ?>><?php echo esc_html($name); ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </label>
+                                    <p class="description" style="margin-top:8px;">Changes only apply to new reviews fetched after saving. To translate existing reviews, use the 'Wipe Data' zone below and fetch again.</p>
+                                </div>
                             </td>
                         </tr>
                     </table>
-                    <?php submit_button( 'Save Interval Settings' ); ?>
+                    <?php submit_button( 'Save Configurations' ); ?>
                 </form>
             </div>
 
@@ -97,6 +151,8 @@
                 <form method="post" action="" style="margin-top: 15px;">
                     <?php wp_nonce_field( 'ftr_fetch_action', 'ftr_fetch_nonce' ); ?>
                     <input type="hidden" name="ftr_manual_fetch" value="1">
+                    <input type="hidden" name="target_url" value="<?php echo esc_attr( $target_url ); ?>">
+                    <input type="hidden" name="sync_hours" value="<?php echo esc_attr( $sync_hours ); ?>">
                     <?php submit_button( 'Fetch Reviews Now', 'secondary' ); ?>
                 </form>
             </div>
@@ -151,7 +207,7 @@
         </div>
 
         <div id="tab-reviews" class="ftr-tab-content">
-            <p>Recent reviews (Max 200 shown here for admin performance). Edit TR translations manually below.</p>
+            <p>Recent reviews (Max 200 shown here for admin performance). If auto-translation is disabled, both columns show the original text.</p>
             <form method="post" action="">
                 <?php wp_nonce_field( 'ftr_fetch_action', 'ftr_fetch_nonce' ); ?>
                 <input type="hidden" name="ftr_save_translations" value="1">
@@ -161,8 +217,8 @@
                             <th style="width: 6%;">ID</th>
                             <th style="width: 12%;">Author</th>
                             <th style="width: 10%;">Rating</th>
-                            <th style="width: 36%;">Original Text (EN)</th>
-                            <th style="width: 36%;">Front-End Text (TR)</th>
+                            <th style="width: 36%;">Original Text (Source)</th>
+                            <th style="width: 36%;">Front-End Text (Translated)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -190,7 +246,7 @@
                         <?php endif; ?>
                     </tbody>
                 </table>
-                <?php if ( !empty($reviews) ) submit_button( 'Save Translations', 'primary' ); ?>
+                <?php if ( !empty($reviews) ) submit_button( 'Save Manual Edits', 'primary' ); ?>
             </form>
         </div>
 
@@ -250,7 +306,7 @@
                     <li><strong>Custom SQL Tables:</strong> All reviews, logs, and settings are stored in isolated <code>wp_ftr_*</code> tables, entirely bypassing standard <code>wp_options</code> bloat.</li>
                     <li><strong>Transient Caching:</strong> Frontend shortcode output is heavily cached using Native WP Transients. When the cron fetches new reviews, the cache is automatically busted.</li>
                     <li><strong>Fetch Locks:</strong> To prevent overlapping crons and database race conditions, a transient lock is generated the moment a fetch begins, securing the SQL transaction.</li>
-                    <li><strong>Native Translations:</strong> Because multi-lingual plugins (like TranslatePress) cannot translate text directly into the primary site language, this plugin hooks into a free Google Translate API endpoint to convert English reviews into Turkish automatically <em>during</em> the scrape. You can manually edit these overrides in the "Stored Reviews" tab.</li>
+                    <li><strong>Native Translations:</strong> Because multi-lingual plugins (like TranslatePress) cannot translate text directly into the primary site language, this plugin hooks into a free API endpoint to convert reviews between any supported language automatically <em>during</em> the scrape. You can manually edit these overrides in the "Stored Reviews" tab.</li>
                 </ul>
             </div>
             
@@ -267,7 +323,6 @@
                 const contents = document.querySelectorAll('.ftr-tab-content');
                 let activeTabId = localStorage.getItem('ftr_active_tab') || 'setup';
 
-                // Check if user clicked a link containing a specific #hash (like #help)
                 if (window.location.hash) {
                     const hashTab = window.location.hash.replace('#', '');
                     if (document.querySelector(`.nav-tab[data-tab="${hashTab}"]`)) {
@@ -291,7 +346,6 @@
                 tabs.forEach(tab => {
                     tab.addEventListener('click', function(e) {
                         e.preventDefault();
-                        // Update URL hash for sharing/linking
                         window.history.pushState(null, null, '#' + this.dataset.tab);
                         switchTab(this.dataset.tab);
                     });
