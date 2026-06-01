@@ -16,6 +16,8 @@ class FTR_DB {
             author varchar(255) NOT NULL,
             avatar text NOT NULL,
             rating tinyint(1) NOT NULL,
+            review_title text NOT NULL,
+            review_title_tr text NOT NULL,
             review_text text NOT NULL,
             review_text_tr text NOT NULL,
             review_date datetime NOT NULL,
@@ -48,7 +50,7 @@ class FTR_DB {
 
         self::update_setting('do_activation_redirect', '1');
         self::update_setting('sync_hours', '24');
-        
+        self::update_setting('auto_fetch_enabled', '1');
         FTR_Scraper::schedule_cron();
     }
 
@@ -72,15 +74,7 @@ class FTR_DB {
 
     public static function add_log( $status, $message, $metrics = array() ) {
         global $wpdb;
-        $defaults = array(
-            'http_status'    => '',
-            'lock_hit'       => 0,
-            'parsed_count'   => 0,
-            'inserted_count' => 0,
-            'existing_count' => 0,
-            'updated_count'  => 0,
-            'failed_count'   => 0
-        );
+        $defaults = array( 'http_status' => '', 'lock_hit' => 0, 'parsed_count' => 0, 'inserted_count' => 0, 'existing_count' => 0, 'updated_count' => 0, 'failed_count' => 0 );
         $m = wp_parse_args( $metrics, $defaults );
 
         $wpdb->insert( $wpdb->prefix . 'ftr_logs', array(
@@ -126,10 +120,15 @@ class FTR_DB {
         if ( $wpdb->get_var("SHOW TABLES LIKE '$table'") != $table ) return array();
         
         $where = "WHERE 1=1";
+        $order_by = "ORDER BY review_date DESC"; // Дифолт сортирање (најнови први)
         
         if ( !empty($args['ids']) && is_array($args['ids']) ) {
             $ids = array_map('intval', $args['ids']);
-            $where .= " AND short_id IN (" . implode(',', $ids) . ")";
+            $ids_str = implode(',', $ids);
+            $where .= " AND short_id IN (" . $ids_str . ")";
+            
+            // ТРИКОТ: Го менуваме сортирањето за строго да го следи твојот редослед!
+            $order_by = "ORDER BY FIELD(short_id, " . $ids_str . ")";
         }
         
         if ( !empty($args['exclude_ids']) && is_array($args['exclude_ids']) ) {
@@ -142,7 +141,7 @@ class FTR_DB {
             $limit_clause = $wpdb->prepare(" LIMIT %d", intval($args['limit']));
         }
 
-        $query = "SELECT * FROM $table $where ORDER BY review_date DESC $limit_clause";
+        $query = "SELECT * FROM $table $where $order_by $limit_clause";
         $raw_reviews = $wpdb->get_results( $query, ARRAY_A );
         
         $formatted = array();
@@ -153,6 +152,8 @@ class FTR_DB {
                 'author'   => $r['author'],
                 'avatar'   => $r['avatar'],
                 'rating'   => $r['rating'],
+                'title'    => $r['review_title'],
+                'title_tr' => !empty($r['review_title_tr']) ? $r['review_title_tr'] : $r['review_title'],
                 'text'     => $r['review_text'],
                 'text_tr'  => !empty($r['review_text_tr']) ? $r['review_text_tr'] : $r['review_text'],
                 'date'     => $r['review_date']

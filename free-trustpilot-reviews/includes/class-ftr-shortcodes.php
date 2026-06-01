@@ -11,7 +11,7 @@ class FTR_Shortcodes {
     }
 
     public function register_assets() {
-        $version = defined( 'FTR_VERSION' ) ? FTR_VERSION : '1.5.0';
+        $version = defined( 'FTR_VERSION' ) ? FTR_VERSION : '1.5.1';
         wp_register_style( 'ftr-style', FTR_URL . 'assets/css/style.css', array(), $version );
         wp_register_script( 'ftr-slider-js', FTR_URL . 'assets/js/slider.js', array(), $version, true );
     }
@@ -38,7 +38,8 @@ class FTR_Shortcodes {
     }
 
     public function render_slider( $atts ) {
-        $atts = shortcode_atts( array( 'no-id' => '', 'limit' => 10 ), $atts );
+        // FIXED: Added 'id' => '' so WordPress doesn't strip it!
+        $atts = shortcode_atts( array( 'id' => '', 'no-id' => '', 'limit' => 10 ), $atts );
         $cache_key = $this->get_cache_key( 'slider', $atts );
         
         $cached_output = get_transient( $cache_key );
@@ -60,7 +61,8 @@ class FTR_Shortcodes {
     }
 
     public function render_grid( $atts ) {
-        $atts = shortcode_atts( array( 'no-id' => '', 'limit' => '' ), $atts ); // No limit by default for [ftr_all] unless specified
+        // FIXED: Added 'id' => '' here as well for consistency
+        $atts = shortcode_atts( array( 'id' => '', 'no-id' => '', 'limit' => '' ), $atts ); 
         $cache_key = $this->get_cache_key( 'all', $atts );
 
         $cached_output = get_transient( $cache_key );

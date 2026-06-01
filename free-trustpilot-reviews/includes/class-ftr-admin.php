@@ -23,10 +23,27 @@ class FTR_Admin {
     }
 
     private function handle_translation_saves() {
+        if ( ! isset( $_POST['ftr_translation_present'] ) ) {
+            return;
+        }
+
         $enable_trans = isset($_POST['enable_translation']) ? '1' : '0';
         FTR_DB::update_setting( 'enable_translation', $enable_trans );
         if ( isset($_POST['translate_from']) ) FTR_DB::update_setting( 'translate_from', sanitize_text_field($_POST['translate_from']) );
         if ( isset($_POST['translate_to']) ) FTR_DB::update_setting( 'translate_to', sanitize_text_field($_POST['translate_to']) );
+    }
+
+    private function handle_auto_fetch_saves() {
+        if ( ! isset( $_POST['ftr_auto_fetch_present'] ) ) {
+            return;
+        }
+
+        $enabled = isset( $_POST['auto_fetch_enabled'] ) ? '1' : '0';
+        FTR_DB::update_setting( 'auto_fetch_enabled', $enabled );
+
+        if ( $enabled !== '1' ) {
+            wp_clear_scheduled_hook( 'freetrustpilotreviews_daily_fetch_hook' );
+        }
     }
 
     public function render_admin_page() {
@@ -37,14 +54,25 @@ class FTR_Admin {
             if ( isset($_POST['translations']) && is_array($_POST['translations']) ) {
                 global $wpdb;
                 $table = $wpdb->prefix . 'ftr_reviews';
-                foreach ( $_POST['translations'] as $tp_id => $tr_text ) {
-                    $wpdb->update( $table, array( 'review_text_tr' => wp_kses_post( wp_unslash( $tr_text ) ) ), array( 'tp_id' => sanitize_text_field( $tp_id ) ) );
+                
+                foreach ( $_POST['translations'] as $tp_id => $tr_data ) {
+                    // SAFETY FIX: Check if it's an array (new form) or string (old form)
+                    if ( is_array( $tr_data ) ) {
+                        $wpdb->update( $table, array( 
+                            'review_title_tr' => isset($tr_data['title']) ? sanitize_text_field( wp_unslash( $tr_data['title'] ) ) : '',
+                            'review_text_tr'  => isset($tr_data['text']) ? wp_kses_post( wp_unslash( $tr_data['text'] ) ) : ''
+                        ), array( 'tp_id' => sanitize_text_field( $tp_id ) ) );
+                    } elseif ( is_string( $tr_data ) ) {
+                        $wpdb->update( $table, array( 
+                            'review_text_tr' => wp_kses_post( wp_unslash( $tr_data ) ) 
+                        ), array( 'tp_id' => sanitize_text_field( $tp_id ) ) );
+                    }
                 }
                 FTR_DB::update_setting('cache_version', time()); 
                 $fetch_result = array( 'success' => true, 'message' => 'Manual Translations saved & Cache cleared.' );
             }
         }
-
+        
         if ( isset($_POST['ftr_wipe_deactivate']) && check_admin_referer('ftr_wipe_action', 'ftr_wipe_nonce') ) {
             global $wpdb;
             $wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}ftr_reviews" );
@@ -70,6 +98,7 @@ class FTR_Admin {
             if ( isset($_POST['target_url']) ) FTR_DB::update_setting( 'target_url', esc_url_raw($_POST['target_url']) );
             if ( isset($_POST['sync_hours']) ) FTR_DB::update_setting( 'sync_hours', intval($_POST['sync_hours']) );
             $this->handle_translation_saves();
+            $this->handle_auto_fetch_saves();
             
             $fetch_result = FTR_Scraper::fetch();
             FTR_Scraper::schedule_cron();
@@ -79,15 +108,17 @@ class FTR_Admin {
             if ( isset($_POST['sync_hours']) ) FTR_DB::update_setting( 'sync_hours', intval($_POST['sync_hours']) );
             if ( isset($_POST['custom_css']) ) FTR_DB::update_setting( 'custom_css', wp_strip_all_tags( wp_unslash( $_POST['custom_css'] ) ) );
             $this->handle_translation_saves();
+            $this->handle_auto_fetch_saves();
             
             FTR_DB::update_setting('cache_version', time()); 
-            FTR_Scraper::schedule_cron(); 
-            $fetch_result = array( 'success' => true, 'message' => 'Settings saved. Cache cleared and cron rescheduled.' );
+            $cron_scheduled = FTR_Scraper::schedule_cron(); 
+            $fetch_result = array( 'success' => true, 'message' => $cron_scheduled ? 'Settings saved. Cache cleared and cron rescheduled.' : 'Settings saved. Cache cleared. Automatic fetching is disabled.' );
         }
 
         // Variable Fetching for Template
         $target_url    = FTR_DB::get_setting( 'target_url', '' );
         $sync_hours    = FTR_DB::get_setting( 'sync_hours', 24 );
+        $auto_fetch_enabled = FTR_DB::get_setting( 'auto_fetch_enabled', '1' );
         $custom_css    = FTR_DB::get_setting( 'custom_css', '' );
         $business_name = FTR_DB::get_setting( 'business_name', 'Not Fetched Yet' );
         $reviews       = FTR_DB::get_formatted_reviews(array('limit' => 200));
@@ -103,8 +134,8 @@ class FTR_Admin {
         $status_inserted     = FTR_DB::get_setting('total_inserted', '0');
 
         $next_run = wp_next_scheduled( 'freetrustpilotreviews_daily_fetch_hook' );
-        $time_diff = 'Not scheduled';
-        if ( $next_run ) {
+        $time_diff = $auto_fetch_enabled === '1' ? 'Not scheduled' : 'Auto-fetch disabled';
+        if ( $auto_fetch_enabled === '1' && $next_run ) {
             $diff_seconds = $next_run - time();
             $time_diff = $diff_seconds <= 0 ? 'Pending' : floor($diff_seconds / 3600) . 'h ' . floor(($diff_seconds % 3600) / 60) . 'm';
         }

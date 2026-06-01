@@ -32,11 +32,10 @@ function initFtrSlider() {
         let startX;
         let scrollLeft;
 
-        // Drag Events
         wrapper.addEventListener('mousedown', (e) => {
             isDown = true;
-            wrapper.style.scrollSnapType = 'none'; // Disable snap while dragging
-            wrapper.style.scrollBehavior = 'auto'; // Instant drag movement
+            wrapper.style.scrollSnapType = 'none'; 
+            wrapper.style.scrollBehavior = 'auto'; 
             startX = e.pageX - wrapper.offsetLeft;
             scrollLeft = wrapper.scrollLeft;
         });
@@ -56,17 +55,15 @@ function initFtrSlider() {
 
         wrapper.addEventListener('mousemove', (e) => {
             if (!isDown) return;
-            e.preventDefault(); // Prevent text highlighting while dragging slider
+            e.preventDefault(); 
             const x = e.pageX - wrapper.offsetLeft;
-            const walk = (x - startX) * 1.5; // Drag speed multiplier
+            const walk = (x - startX) * 1.5; 
             wrapper.scrollLeft = scrollLeft - walk;
         });
 
-        // Calculate width robustly
+        // True DOM Width Calculation
         const getSlideWidth = () => {
-            if (slides[0].offsetWidth > 0) return slides[0].offsetWidth + 20;
-            if (window.innerWidth >= 1024) return (wrapper.clientWidth / 3) + 20;
-            if (window.innerWidth >= 768) return (wrapper.clientWidth / 2) + 20;
+            if (slides[0] && slides[0].offsetWidth > 0) return slides[0].offsetWidth + 20; // 20 is the CSS gap
             return wrapper.clientWidth + 20;
         };
 
@@ -82,21 +79,64 @@ function initFtrSlider() {
             });
         }
 
-        if (dotsContainer) {
-            slides.forEach((_, i) => {
+        // Dynamic Dot Builder using Actual Scroll Area
+        const buildDots = () => {
+            if (!dotsContainer) return;
+            dotsContainer.innerHTML = ''; 
+            
+            const slideWidth = getSlideWidth();
+            const maxScroll = wrapper.scrollWidth - wrapper.clientWidth;
+            
+            // If there's no room to scroll (e.g., 2 reviews on a desktop screen), hide dots
+            if (maxScroll <= 5) return; 
+
+            // Calculate exact number of scroll jumps possible
+            const totalDots = Math.ceil(maxScroll / slideWidth) + 1;
+
+            for (let i = 0; i < totalDots; i++) {
                 const dot = document.createElement('div');
                 dot.classList.add('ftr-dot');
                 if (i === 0) dot.classList.add('active');
+                
                 dot.addEventListener('click', () => {
-                    wrapper.scrollTo({ left: getSlideWidth() * i, behavior: 'smooth' });
+                    // Ensure clicking the last dot snaps perfectly to the end edge
+                    if (i === totalDots - 1) {
+                        wrapper.scrollTo({ left: maxScroll, behavior: 'smooth' });
+                    } else {
+                        wrapper.scrollTo({ left: slideWidth * i, behavior: 'smooth' });
+                    }
                 });
                 dotsContainer.appendChild(dot);
-            });
+            }
+        };
 
-            const dots = dotsContainer.querySelectorAll('.ftr-dot');
+        // Run with a 100ms delay to ensure the browser has finished painting the CSS Flexbox widths
+        setTimeout(buildDots, 100);
 
+        // Rebuild dots if the user resizes their browser/rotates their device
+        let resizeTimer;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(buildDots, 250);
+        });
+
+        // Scroll Sync for Dots
+        if (dotsContainer) {
             wrapper.addEventListener('scroll', () => {
-                const currentIndex = Math.round(wrapper.scrollLeft / getSlideWidth());
+                const dots = dotsContainer.querySelectorAll('.ftr-dot');
+                if (dots.length === 0) return;
+
+                const maxScroll = wrapper.scrollWidth - wrapper.clientWidth;
+                let currentIndex = Math.round(wrapper.scrollLeft / getSlideWidth());
+                
+                // Force the last dot to activate if we hit the absolute scroll limit
+                if (wrapper.scrollLeft >= maxScroll - 5) {
+                    currentIndex = dots.length - 1;
+                }
+
+                // Safety bound
+                currentIndex = Math.min(currentIndex, dots.length - 1);
+
                 dots.forEach(dot => dot.classList.remove('active'));
                 if (dots[currentIndex]) {
                     dots[currentIndex].classList.add('active');
@@ -104,9 +144,14 @@ function initFtrSlider() {
             });
         }
 
+        // Autoplay Loop
         setInterval(() => {
-            if (isHovered || isDown) return; // Don't autoplay while dragging
+            if (isHovered || isDown) return; 
             const maxScroll = wrapper.scrollWidth - wrapper.clientWidth;
+            
+            // Disable autoplay if it can't scroll
+            if (maxScroll <= 5) return;
+
             if (wrapper.scrollLeft >= maxScroll - 10) {
                 wrapper.scrollTo({ left: 0, behavior: 'smooth' });
             } else {

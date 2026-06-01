@@ -12,7 +12,6 @@ $avail_languages = array(
 ?>
 
 <style>
-    .ftr-wrap { max-width: 1050px; margin-top: 20px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; }
     .ftr-header h1 { font-size: 26px; font-weight: 600; margin: 0 0 20px 0; color: #1d2327; display: flex; align-items: center; gap: 10px; }
     .ftr-badge { background: #2271b1; color: #fff; padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: 500; }
     .ftr-tab-content { display: none; background: #fff; padding: 30px; border: 1px solid #c3c4c7; border-top: none; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
@@ -29,11 +28,13 @@ $avail_languages = array(
     .ftr-status-box h4 { margin: 0 0 5px 0; font-size: 12px; color: #646970; text-transform: uppercase; }
     .ftr-status-box p { margin: 0; font-size: 16px; font-weight: 600; color: #1d2327; }
     .ftr-trans-options { background: #fff; border-left: 3px solid #00b67a; padding: 15px; margin-top: 10px; border-radius: 0 4px 4px 0; }
+    .ftr-auto-fetch-note { margin: 8px 0 0; color: #646970; max-width: 680px; }
+    .ftr-warning-note { background: #fff8e5; border-left: 4px solid #dba617; padding: 12px 14px; margin: 12px 0 0; }
 </style>
 
 <div class="wrap ftr-wrap">
     <div class="ftr-header">
-        <h1>⭐ Free Trustpilot Reviews for WP - <?php echo esc_html($business_name); ?> <span class="ftr-badge">v1.5.1</span></h1>
+        <h1>⭐ Free Trustpilot Reviews for WP - <?php echo esc_html($business_name); ?> <span class="ftr-badge">v1.5.6</span></h1>
     </div>
 
     <?php if ( $fetch_result ) : ?>
@@ -53,12 +54,24 @@ $avail_languages = array(
                         <td><input type="url" name="target_url" value="<?php echo esc_attr( $target_url ); ?>" placeholder="https://www.trustpilot.com/review/YourCompany.com" class="regular-text" required style="width: 100%;" /></td>
                     </tr>
                     <tr valign="top">
+                        <th scope="row" style="padding-left: 0;">Automatic Fetching</th>
+                        <td>
+                            <input type="hidden" name="ftr_auto_fetch_present" value="1">
+                            <label>
+                                <input type="checkbox" name="auto_fetch_enabled" value="1" <?php checked( '1', $auto_fetch_enabled ); ?>>
+                                Enable automatic background fetch
+                            </label>
+                            <p class="description ftr-auto-fetch-note">Turn this off if Trustpilot/Cloudflare blocks server requests. Stored reviews and shortcodes will keep working, and you can still use manual fetch.</p>
+                        </td>
+                    </tr>
+                    <tr valign="top">
                         <th scope="row" style="padding-left: 0;">Sync Interval</th>
                         <td><input type="number" name="sync_hours" value="<?php echo esc_attr( $sync_hours ); ?>" min="1" max="168" class="small-text" required /> <span class="description">Hours</span></td>
                     </tr>
                     <tr valign="top">
                         <th scope="row" style="padding-left: 0;">Auto-Translation</th>
                         <td>
+                            <input type="hidden" name="ftr_translation_present" value="1">
                             <label><input type="checkbox" name="enable_translation" value="1" <?php checked( '1', $enable_translation ); ?>> Enable API Translation on Fetch</label>
                             <div class="ftr-trans-options">
                                 <label style="margin-right:15px;">From: 
@@ -113,12 +126,24 @@ $avail_languages = array(
                             <td><input type="url" value="<?php echo esc_attr( $target_url ); ?>" class="regular-text" readonly style="background: #f0f0f1; border-color: #8c8f94; color: #8c8f94;" /></td>
                         </tr>
                         <tr valign="top">
+                            <th scope="row">Automatic Fetching</th>
+                            <td>
+                                <input type="hidden" name="ftr_auto_fetch_present" value="1">
+                                <label>
+                                    <input type="checkbox" name="auto_fetch_enabled" value="1" <?php checked( '1', $auto_fetch_enabled ); ?>>
+                                    Enable automatic background fetch
+                                </label>
+                                <p class="description ftr-auto-fetch-note">Disable this when Trustpilot/Cloudflare blocks server-side requests. Existing saved reviews stay available, shortcode output stays cached, and the manual fetch button below remains usable.</p>
+                            </td>
+                        </tr>
+                        <tr valign="top">
                             <th scope="row">Sync Interval</th>
                             <td><input type="number" name="sync_hours" value="<?php echo esc_attr( $sync_hours ); ?>" min="1" max="168" class="small-text" required /> <span class="description">Hours</span></td>
                         </tr>
                         <tr valign="top">
                             <th scope="row">API Translation</th>
                             <td>
+                                <input type="hidden" name="ftr_translation_present" value="1">
                                 <label><input type="checkbox" name="enable_translation" value="1" <?php checked( '1', $enable_translation ); ?>> Enable Automatic Translation for new reviews</label>
                                 <div class="ftr-trans-options">
                                     <label style="margin-right:15px;">Translate From:<br> 
@@ -148,6 +173,9 @@ $avail_languages = array(
             <div class="ftr-card">
                 <h2>Manual Sync</h2>
                 <p><strong>Next automatic sync scheduled in:</strong> <span style="color: #2271b1; font-weight: bold;"><?php echo esc_html( $time_diff ); ?></span></p>
+                <?php if ( $auto_fetch_enabled !== '1' ) : ?>
+                    <p class="ftr-warning-note"><strong>Automatic fetching is disabled.</strong> This prevents repeated blocked requests. Use <em>Fetch Reviews Now</em> whenever you want to test Trustpilot again.</p>
+                <?php endif; ?>
                 <form method="post" action="" style="margin-top: 15px;">
                     <?php wp_nonce_field( 'ftr_fetch_action', 'ftr_fetch_nonce' ); ?>
                     <input type="hidden" name="ftr_manual_fetch" value="1">
@@ -206,7 +234,7 @@ $avail_languages = array(
             </div>
         </div>
 
-        <div id="tab-reviews" class="ftr-tab-content">
+<div id="tab-reviews" class="ftr-tab-content">
             <p>Recent reviews (Max 200 shown here for admin performance). If auto-translation is disabled, both columns show the original text.</p>
             <form method="post" action="">
                 <?php wp_nonce_field( 'ftr_fetch_action', 'ftr_fetch_nonce' ); ?>
@@ -237,9 +265,15 @@ $avail_languages = array(
                                         </div>
                                     </td>
                                     <td><?php echo str_repeat('⭐', $review['rating']); ?></td>
-                                    <td style="font-size:12px; color:#50575e;"><?php echo esc_html( $review['text'] ); ?></td>
+                                    <td style="font-size:12px; color:#50575e;">
+                                        <?php if ( !empty($review['title']) ) : ?>
+                                            <strong><?php echo esc_html( $review['title'] ); ?></strong><br>
+                                        <?php endif; ?>
+                                        <?php echo esc_html( $review['text'] ); ?>
+                                    </td>
                                     <td>
-                                        <textarea name="translations[<?php echo esc_attr($review['id']); ?>]" rows="4" style="width: 100%; font-size: 13px; padding: 8px;"><?php echo esc_textarea( $review['text_tr'] ); ?></textarea>
+                                        <input type="text" name="translations[<?php echo esc_attr($review['id']); ?>][title]" value="<?php echo esc_attr($review['title_tr']); ?>" style="width: 100%; margin-bottom: 5px; font-weight: bold; font-size: 13px; padding: 4px 8px;" placeholder="Review Title">
+                                        <textarea name="translations[<?php echo esc_attr($review['id']); ?>][text]" rows="4" style="width: 100%; font-size: 13px; padding: 8px;" placeholder="Review Text"><?php echo esc_textarea( $review['text_tr'] ); ?></textarea>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -249,7 +283,7 @@ $avail_languages = array(
                 <?php if ( !empty($reviews) ) submit_button( 'Save Manual Edits', 'primary' ); ?>
             </form>
         </div>
-
+        
         <div id="tab-logs" class="ftr-tab-content">
             <p>History of automated cron runs and manual fetches. Logs older than 30 days are pruned automatically.</p>
             <table class="wp-list-table widefat fixed striped" style="margin-top: 20px; font-size: 13px;">

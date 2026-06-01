@@ -4,7 +4,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class FTR_Scraper {
 
     public static function init() {
-        add_action( 'freetrustpilotreviews_daily_fetch_hook', array( __CLASS__, 'fetch' ) );
+        add_action( 'freetrustpilotreviews_daily_fetch_hook', array( __CLASS__, 'cron_fetch' ) );
         add_filter( 'cron_schedules', array( __CLASS__, 'custom_cron_schedule' ) );
     }
 
@@ -14,16 +14,34 @@ class FTR_Scraper {
         return $schedules;
     }
 
-    public static function schedule_cron() {
-        wp_clear_scheduled_hook( 'freetrustpilotreviews_daily_fetch_hook' );
-        $hours = max( 1, (int) FTR_DB::get_setting( 'sync_hours', 24 ) );
-        wp_schedule_event( time() + ( $hours * 3600 ), 'freetrustpilotreviews_custom', 'freetrustpilotreviews_daily_fetch_hook' );
+    public static function is_auto_fetch_enabled() {
+        return FTR_DB::get_setting( 'auto_fetch_enabled', '1' ) === '1';
     }
 
-    // UPDATED: Now accepts dynamic 'from' and 'to' language codes
+    public static function schedule_cron() {
+        wp_clear_scheduled_hook( 'freetrustpilotreviews_daily_fetch_hook' );
+
+        if ( ! self::is_auto_fetch_enabled() ) {
+            return false;
+        }
+
+        $hours = max( 1, (int) FTR_DB::get_setting( 'sync_hours', 24 ) );
+        return wp_schedule_event( time() + ( $hours * 3600 ), 'freetrustpilotreviews_custom', 'freetrustpilotreviews_daily_fetch_hook' );
+    }
+
+    public static function cron_fetch() {
+        if ( ! self::is_auto_fetch_enabled() ) {
+            wp_clear_scheduled_hook( 'freetrustpilotreviews_daily_fetch_hook' );
+            FTR_DB::add_log( 'warning', 'Automatic fetch skipped because auto-fetch is disabled.' );
+            return array( 'success' => false, 'message' => 'Automatic fetch is disabled.' );
+        }
+
+        return self::fetch();
+    }
+
     private static function translate_text( $text, $from, $to ) {
         if ( empty($text) ) return '';
-        if ( $from === $to && $from !== 'auto' ) return $text; // Skip if same language
+        if ( $from === $to && $from !== 'auto' ) return $text; 
         
         $url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=' . urlencode($from) . '&tl=' . urlencode($to) . '&dt=t&q=' . urlencode($text);
         $response = wp_remote_get($url, array('timeout' => 15));
@@ -96,6 +114,7 @@ class FTR_Scraper {
                         'author' => sanitize_text_field( $rev['consumer']['displayName'] ?? 'Anonymous' ),
                         'avatar' => esc_url_raw( $avatar ),
                         'rating' => intval( $rev['rating'] ?? 0 ),
+                        'title'  => sanitize_text_field( $rev['title'] ?? '' ),
                         'text'   => sanitize_textarea_field( $rev['text'] ?? '' ),
                         'date'   => sanitize_text_field( $rev['dates']['publishedDate'] ?? date('c') )
                     );
@@ -115,7 +134,6 @@ class FTR_Scraper {
             return strtotime($a['date']) - strtotime($b['date']);
         });
 
-        // Pull Translation Settings Before the Loop
         $enable_trans = FTR_DB::get_setting('enable_translation', '0');
         $trans_from   = FTR_DB::get_setting('translate_from', 'auto');
         $trans_to     = FTR_DB::get_setting('translate_to', 'en');
@@ -124,7 +142,6 @@ class FTR_Scraper {
         $table = $wpdb->prefix . 'ftr_reviews';
 
         $wpdb->query("START TRANSACTION");
-
         $max_id = (int) $wpdb->get_var("SELECT MAX(short_id) FROM $table FOR UPDATE");
 
         foreach ( $new_reviews as $rev ) {
@@ -133,40 +150,35 @@ class FTR_Scraper {
                 if ( $exists ) {
                     if ( empty($exists->avatar) && !empty($rev['avatar']) ) {
                         $updated = $wpdb->update( $table, array('avatar' => $rev['avatar']), array('id' => $exists->id) );
-                        if ($updated !== false) {
-                            $metrics['updated_count']++;
-                        } else {
-                            $metrics['failed_count']++;
-                        }
+                        if ($updated !== false) $metrics['updated_count']++; else $metrics['failed_count']++;
                     } else {
                         $metrics['existing_count']++;
                     }
                 } else {
                     $max_id++;
                     
-                    // Conditionally Translate
                     if ( $enable_trans === '1' ) {
-                        $front_end_text = self::translate_text($rev['text'], $trans_from, $trans_to);
+                        $front_end_title = self::translate_text($rev['title'], $trans_from, $trans_to);
+                        $front_end_text  = self::translate_text($rev['text'], $trans_from, $trans_to);
                     } else {
-                        $front_end_text = $rev['text']; // Fallback to raw English
+                        $front_end_title = $rev['title'];
+                        $front_end_text  = $rev['text']; 
                     }
                     
                     $inserted = $wpdb->insert( $table, array(
-                        'tp_id'       => $rev['id'],
-                        'short_id'    => $max_id,
-                        'author'      => $rev['author'],
-                        'avatar'      => $rev['avatar'],
-                        'rating'      => $rev['rating'],
-                        'review_text' => $rev['text'],
-                        'review_text_tr' => $front_end_text, // Safely repurposed DB column
-                        'review_date' => date('Y-m-d H:i:s', strtotime($rev['date']))
+                        'tp_id'           => $rev['id'],
+                        'short_id'        => $max_id,
+                        'author'          => $rev['author'],
+                        'avatar'          => $rev['avatar'],
+                        'rating'          => $rev['rating'],
+                        'review_title'    => $rev['title'],
+                        'review_title_tr' => $front_end_title,
+                        'review_text'     => $rev['text'],
+                        'review_text_tr'  => $front_end_text,
+                        'review_date'     => date('Y-m-d H:i:s', strtotime($rev['date']))
                     ));
                     
-                    if ($inserted) {
-                        $metrics['inserted_count']++;
-                    } else {
-                        $metrics['failed_count']++;
-                    }
+                    if ($inserted) $metrics['inserted_count']++; else $metrics['failed_count']++;
                 }
             } else {
                 $metrics['failed_count']++;

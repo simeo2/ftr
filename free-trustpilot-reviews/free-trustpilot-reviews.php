@@ -3,7 +3,7 @@
  * Plugin Name: Free Trustpilot Reviews for WP
  * Plugin URI: https://github.com/simeo2/ftr
  * Description: A robust, production-ready plugin to fetch, cache, and display Trustpilot reviews utilizing isolated custom tables, sync locks, and transient caching.
- * Version: 1.5.1
+ * Version: 1.5.6
  * Author: Simeon Zahariev
  * Text Domain: free-tp-reviews
  */
@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 define( 'FTR_PATH', plugin_dir_path( __FILE__ ) );
 define( 'FTR_URL', plugin_dir_url( __FILE__ ) );
-define( 'FTR_VERSION', '1.5.1' );
+define( 'FTR_VERSION', '1.5.6' );
 
 require_once FTR_PATH . 'includes/class-ftr-db.php';
 require_once FTR_PATH . 'includes/class-ftr-scraper.php';
